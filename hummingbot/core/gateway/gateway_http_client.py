@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 import re
 import ssl
 from decimal import Decimal
@@ -75,6 +76,16 @@ class GatewayHttpClient:
     _gateway_config_keys: List[str] = []
     _gateway_ready_event: Optional[asyncio.Event] = None
     __instance = None
+
+    @staticmethod
+    def _get_proxy_url():
+        """Get proxy URL from environment variables."""
+        proxy_vars = ['ALL_PROXY', 'HTTP_PROXY', 'HTTPS_PROXY', 'all_proxy', 'http_proxy', 'https_proxy']
+        for var in proxy_vars:
+            proxy_url = os.getenv(var)
+            if proxy_url:
+                return proxy_url
+        return None
 
     @staticmethod
     def get_instance(gateway_config: Optional["GatewayConfigMap"] = None) -> "GatewayHttpClient":
@@ -410,21 +421,22 @@ class GatewayHttpClient:
         client = self._http_client(self._gateway_config)
 
         parsed_response = {}
+        proxy_url = GatewayHttpClient._get_proxy_url()
         try:
             if method == "get":
                 if len(params) > 0:
                     if use_body:
-                        response = await client.get(url, json=params)
+                        response = await client.get(url, json=params, proxy=proxy_url)
                     else:
-                        response = await client.get(url, params=params)
+                        response = await client.get(url, params=params, proxy=proxy_url)
                 else:
-                    response = await client.get(url)
+                    response = await client.get(url, proxy=proxy_url)
             elif method == "post":
-                response = await client.post(url, json=params)
+                response = await client.post(url, json=params, proxy=proxy_url)
             elif method == 'put':
-                response = await client.put(url, json=params)
+                response = await client.put(url, json=params, proxy=proxy_url)
             elif method == 'delete':
-                response = await client.delete(url, json=params)
+                response = await client.delete(url, json=params, proxy=proxy_url)
             else:
                 raise ValueError(f"Unsupported request method {method}")
             if not fail_silently and response.status == 504:

@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 from typing import Dict, Optional
 
 import aiohttp
@@ -17,6 +18,16 @@ class DataFeedBase(NetworkBase):
         if cls.dfb_logger is None:
             cls.dfb_logger = logging.getLogger(__name__)
         return cls.dfb_logger
+
+    @staticmethod
+    def _get_proxy_url():
+        """Get proxy URL from environment variables."""
+        proxy_vars = ['ALL_PROXY', 'HTTP_PROXY', 'HTTPS_PROXY', 'all_proxy', 'http_proxy', 'https_proxy']
+        for var in proxy_vars:
+            proxy_url = os.getenv(var)
+            if proxy_url:
+                return proxy_url
+        return None
 
     def __init__(self):
         super().__init__()
@@ -65,8 +76,9 @@ class DataFeedBase(NetworkBase):
 
     async def check_network(self) -> NetworkStatus:
         try:
+            proxy_url = self._get_proxy_url()
             async with aiohttp.ClientSession() as session:
-                async with session.get(self.health_check_endpoint) as resp:
+                async with session.get(self.health_check_endpoint, proxy=proxy_url) as resp:
                     status_text = await resp.text()
                     if resp.status != 200:
                         raise Exception(f"Data feed {self.name} server is down. Status is {status_text}")

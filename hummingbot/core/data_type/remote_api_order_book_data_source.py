@@ -4,6 +4,7 @@ import asyncio
 import aiohttp
 import base64
 import logging
+import os
 import pandas as pd
 from typing import (
     Dict,
@@ -51,6 +52,16 @@ class RemoteAPIOrderBookDataSource(OrderBookTrackerDataSource):
             "Authorization": f"Basic {encoded_auth}"
         }
 
+    @staticmethod
+    def _get_proxy_url():
+        """Get proxy URL from environment variables."""
+        proxy_vars = ['ALL_PROXY', 'HTTP_PROXY', 'HTTPS_PROXY', 'all_proxy', 'http_proxy', 'https_proxy']
+        for var in proxy_vars:
+            proxy_url = os.getenv(var)
+            if proxy_url:
+                return proxy_url
+        return None
+
     async def get_client_session(self) -> aiohttp.ClientSession:
         if self._client_session is None:
             self._client_session = aiohttp.ClientSession()
@@ -60,7 +71,12 @@ class RemoteAPIOrderBookDataSource(OrderBookTrackerDataSource):
         auth: aiohttp.BasicAuth = aiohttp.BasicAuth(login=conf.coinalpha_order_book_api_username,
                                                     password=conf.coinalpha_order_book_api_password)
         client_session: aiohttp.ClientSession = await self.get_client_session()
-        response: aiohttp.ClientResponse = await client_session.get(self.SNAPSHOT_REST_URL, auth=auth)
+        proxy_url = self._get_proxy_url()
+        response: aiohttp.ClientResponse = await client_session.get(
+            self.SNAPSHOT_REST_URL, 
+            auth=auth, 
+            proxy=proxy_url
+        )
         timestamp: float = time.time()
         if response.status != 200:
             raise EnvironmentError(f"Error fetching order book tracker snapshot from {self.SNAPSHOT_REST_URL}.")

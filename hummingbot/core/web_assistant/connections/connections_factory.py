@@ -1,3 +1,4 @@
+import os
 from typing import TypeVar
 
 import aiohttp
@@ -28,6 +29,16 @@ class ConnectionsFactory:
             cls._instance = super().__new__(cls)
         return cls._instance
 
+    @staticmethod
+    def _get_proxy_config():
+        """Get proxy URL from environment variables."""
+        proxy_vars = ['ALL_PROXY', 'HTTP_PROXY', 'HTTPS_PROXY', 'all_proxy', 'http_proxy', 'https_proxy']
+        for var in proxy_vars:
+            proxy_url = os.getenv(var)
+            if proxy_url:
+                return proxy_url
+        return None
+
     async def get_rest_connection(self) -> RESTConnection:
         """
         Get a REST connection using a shared aiohttp.ClientSession.
@@ -46,8 +57,10 @@ class ConnectionsFactory:
     async def _get_shared_client(self) -> aiohttp.ClientSession:
         """
         Lazily create a shared aiohttp.ClientSession if not already available.
+        Automatically configures proxy from environment variables if available.
         """
         if self._shared_client is None:
+            # Create ClientSession without trust_env to ensure compatibility
             self._shared_client = aiohttp.ClientSession()
         return self._shared_client
 

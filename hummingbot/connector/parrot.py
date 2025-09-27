@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Dict, List
@@ -11,6 +12,16 @@ from hummingbot.core.utils.async_utils import safe_gather
 PARROT_MINER_BASE_URL = "https://api.hummingbot.io/bounty/"
 
 s_decimal_0 = Decimal("0")
+
+
+def _get_proxy_url():
+    """Get proxy URL from environment variables."""
+    proxy_vars = ['ALL_PROXY', 'HTTP_PROXY', 'HTTPS_PROXY', 'all_proxy', 'http_proxy', 'https_proxy']
+    for var in proxy_vars:
+        proxy_url = os.getenv(var)
+        if proxy_url:
+            return proxy_url
+    return None
 
 
 @dataclass
@@ -62,9 +73,10 @@ async def get_campaign_summary(exchange: str, trading_pairs: List[str] = []) -> 
 
 
 async def get_market_snapshots(market_id: int):
+    proxy_url = _get_proxy_url()
     async with aiohttp.ClientSession() as client:
         url = f"{PARROT_MINER_BASE_URL}charts/market_band?market_id={market_id}&chart_interval=1"
-        resp = await client.get(url)
+        resp = await client.get(url, proxy=proxy_url)
         resp_json = await resp.json()
 
     if not resp_json or "status" not in resp_json or resp_json.get("status") == "error":
@@ -80,18 +92,20 @@ async def get_market_last_snapshot(market_id: int):
 
     await asyncio.sleep(0.5)
 
+    proxy_url = _get_proxy_url()
     async with aiohttp.ClientSession() as client:
         url = f"{PARROT_MINER_BASE_URL}user/single_snapshot?market_id={market_id}&timestamp={data[-1]}&aggregate_period=1m"
-        resp = await client.get(url)
+        resp = await client.get(url, proxy=proxy_url)
         resp_json = await resp.json()
     return resp_json
 
 
 async def get_active_campaigns(exchange: str, trading_pairs: List[str] = []) -> Dict[int, CampaignSummary]:
     campaigns = {}
+    proxy_url = _get_proxy_url()
     async with aiohttp.ClientSession() as client:
         campaigns_url = f"{PARROT_MINER_BASE_URL}campaigns"
-        resp = await client.get(campaigns_url)
+        resp = await client.get(campaigns_url, proxy=proxy_url)
         resp_json = await resp.json()
 
     if not resp_json or "status" not in resp_json or resp_json.get("status") == "error":
@@ -117,9 +131,10 @@ async def get_active_campaigns(exchange: str, trading_pairs: List[str] = []) -> 
 
 
 async def get_active_markets(campaigns: Dict[int, CampaignSummary]) -> Dict[int, CampaignSummary]:
+    proxy_url = _get_proxy_url()
     async with aiohttp.ClientSession() as client:
         markets_url = f"{PARROT_MINER_BASE_URL}markets"
-        resp = await client.get(markets_url)
+        resp = await client.get(markets_url, proxy=proxy_url)
         resp_json = await resp.json()
 
     if not resp_json or "status" not in resp_json or resp_json.get("status") == "error":

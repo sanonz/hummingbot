@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 from typing import Any, Dict, Optional
 
 import aiohttp
@@ -27,6 +28,16 @@ class LogServerClient(NetworkBase):
             cls.lsc_logger = logging.getLogger(__name__)
         return cls.lsc_logger
 
+    @staticmethod
+    def _get_proxy_url():
+        """Get proxy URL from environment variables."""
+        proxy_vars = ['ALL_PROXY', 'HTTP_PROXY', 'HTTPS_PROXY', 'all_proxy', 'http_proxy', 'https_proxy']
+        for var in proxy_vars:
+            proxy_url = os.getenv(var)
+            if proxy_url:
+                return proxy_url
+        return None
+
     def __init__(self, log_server_url: str = "https://api.coinalpha.com/reporting-proxy-v2/"):
         super().__init__()
         self.queue: asyncio.Queue = asyncio.Queue()
@@ -40,7 +51,13 @@ class LogServerClient(NetworkBase):
 
     @async_retry(retry_count=3, exception_types=[asyncio.TimeoutError, EnvironmentError], raise_exp=True)
     async def send_log(self, session: aiohttp.ClientSession, request_dict: Dict[str, Any]):
-        async with session.request(request_dict["method"], request_dict["url"], **request_dict["request_obj"]) as resp:
+        proxy_url = self._get_proxy_url()
+        # Add proxy to request_obj if available
+        request_obj = request_dict["request_obj"].copy()
+        if proxy_url:
+            request_obj["proxy"] = proxy_url
+        
+        async with session.request(request_dict["method"], request_dict["url"], **request_obj) as resp:
             resp_text = await resp.text()
             self.logger().debug(f"Sent logs: {resp.status} {resp.url} {resp_text} ",
                                 extra={"do_not_send": True})
@@ -87,9 +104,10 @@ class LogServerClient(NetworkBase):
     async def check_network(self) -> NetworkStatus:
         try:
             loop = asyncio.get_event_loop()
+            proxy_url = self._get_proxy_url()
             async with aiohttp.ClientSession(loop=loop,
                                              connector=aiohttp.TCPConnector(verify_ssl=False)) as session:
-                async with session.get(self.log_server_url) as resp:
+                async with session.get(self.log_server_url, proxy=proxy_url) as resp:
                     if resp.status != 200:
                         raise Exception("Log proxy server is down.")
         except asyncio.CancelledError:

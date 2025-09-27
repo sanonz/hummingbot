@@ -1,6 +1,7 @@
 import asyncio
 import aiohttp
 import logging
+import os
 from typing import Optional
 from hummingbot.core.network_base import NetworkBase
 from hummingbot.core.network_iterator import NetworkStatus
@@ -37,6 +38,16 @@ class CustomAPIDataFeed(NetworkBase):
     def health_check_endpoint(self):
         return self._api_url
 
+    @staticmethod
+    def _get_proxy_url():
+        """Get proxy URL from environment variables."""
+        proxy_vars = ['ALL_PROXY', 'HTTP_PROXY', 'HTTPS_PROXY', 'all_proxy', 'http_proxy', 'https_proxy']
+        for var in proxy_vars:
+            proxy_url = os.getenv(var)
+            if proxy_url:
+                return proxy_url
+        return None
+
     def _http_client(self) -> aiohttp.ClientSession:
         if self._shared_client is None:
             self._shared_client = aiohttp.ClientSession()
@@ -44,7 +55,8 @@ class CustomAPIDataFeed(NetworkBase):
 
     async def check_network(self) -> NetworkStatus:
         client = self._http_client()
-        async with client.request("GET", self.health_check_endpoint) as resp:
+        proxy_url = self._get_proxy_url()
+        async with client.request("GET", self.health_check_endpoint, proxy=proxy_url) as resp:
             status_text = await resp.text()
             if resp.status != 200:
                 raise Exception(f"Custom API Feed {self.name} server error: {status_text}")
@@ -68,7 +80,8 @@ class CustomAPIDataFeed(NetworkBase):
 
     async def fetch_price(self):
         client = self._http_client()
-        async with client.request("GET", self._api_url) as resp:
+        proxy_url = self._get_proxy_url()
+        async with client.request("GET", self._api_url, proxy=proxy_url) as resp:
             resp_text = await resp.text()
             if resp.status != 200:
                 raise Exception(f"Custom API Feed {self.name} server error: {resp_text}")
